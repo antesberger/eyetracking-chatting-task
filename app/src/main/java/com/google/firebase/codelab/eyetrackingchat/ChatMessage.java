@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 package com.google.firebase.codelab.eyetrackingchat;
+import java.util.Calendar;
 
 public class ChatMessage {
 
     private String id;
     private String text;
     private String name;
-    private String photoUrl;
-    private String imageUrl;
+    private String messageTime;
 
     public ChatMessage() {
     }
@@ -29,8 +29,7 @@ public class ChatMessage {
     public ChatMessage(String text, String name) {
         this.text = text;
         this.name = name;
-        this.photoUrl = photoUrl;
-        this.imageUrl = imageUrl;
+        this.messageTime = String.valueOf(Calendar.getInstance().getTimeInMillis());
     }
 
     public String getId() {
@@ -53,15 +52,11 @@ public class ChatMessage {
         this.name = name;
     }
 
-    public String getPhotoUrl() {
-        return photoUrl;
-    }
-
     public String getText() {
         return text;
     }
 
-    public String getImageUrl() {
-        return imageUrl;
-    }
+    public void setMessageTime(String time) { this.messageTime = time; }
+
+    public String getMessageTime() {return  messageTime; }
 }

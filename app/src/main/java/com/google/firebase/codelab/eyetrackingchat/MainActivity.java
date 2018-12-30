@@ -16,22 +16,19 @@
 package com.google.firebase.codelab.eyetrackingchat;
 
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
-import android.net.Uri;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
-import android.support.v4.content.ContextCompat;
 import android.support.v4.view.GestureDetectorCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.text.Editable;
-import android.text.InputFilter;
 import android.text.TextWatcher;
 import android.util.Log;
 import android.view.GestureDetector;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -41,21 +38,18 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
-
-import com.bumptech.glide.Glide;
 import com.firebase.ui.database.FirebaseRecyclerAdapter;
 import com.firebase.ui.database.FirebaseRecyclerOptions;
 import com.firebase.ui.database.SnapshotParser;
-import com.google.android.gms.auth.api.Auth;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
@@ -63,12 +57,12 @@ import com.google.firebase.appindexing.FirebaseAppIndex;
 import com.google.firebase.appindexing.Indexable;
 import com.google.firebase.appindexing.builders.Indexables;
 import com.google.firebase.appindexing.builders.PersonBuilder;
-import com.google.firebase.storage.FirebaseStorage;
 import com.firebase.ui.auth.AuthUI;
 
 import java.io.File;
 import java.io.FileWriter;
 import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.Locale;
 
@@ -88,12 +82,7 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.O
 
     private static final String TAG = "MainActivity";
     public static final String MESSAGES_CHILD = "messages";
-    private static final int REQUEST_INVITE = 1;
-    private static final int REQUEST_IMAGE = 2;
-    private static final String LOADING_IMAGE_URL = "https://www.google.com/images/spin-32.gif";
-    public static final int DEFAULT_MSG_LENGTH_LIMIT = 100;
     public static final String ANONYMOUS = "anonymous";
-    private static final String MESSAGE_SENT_EVENT = "message_sent";
     private String mUsername;
     private String mCreationTime;
     private SharedPreferences mSharedPreferences;
@@ -131,6 +120,7 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.O
                             .build(),
                     SIGN_IN_REQUEST_CODE
             );
+            mCreationTime = String.valueOf(Calendar.getInstance().getTimeInMillis());
         } else {
             // User is already signed in. Therefore, display a welcome Toast
             Toast.makeText(
@@ -162,14 +152,17 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.O
             }
         };
 
-        DatabaseReference messagesRef = mFirebaseDatabaseReference.child(MESSAGES_CHILD);
+        final DatabaseReference messagesRef = mFirebaseDatabaseReference.child(MESSAGES_CHILD);
         FirebaseRecyclerOptions<ChatMessage> options =
                 new FirebaseRecyclerOptions.Builder<ChatMessage>()
-                        .setQuery(messagesRef, parser)
+                        .setQuery(messagesRef.orderByChild("messageTime").startAt(mCreationTime), parser)
                         .build();
+
         mFirebaseAdapter = new FirebaseRecyclerAdapter<ChatMessage, MessageViewHolder>(options) {
             @Override
             public MessageViewHolder onCreateViewHolder(ViewGroup viewGroup, int i) {
+
+
                 LayoutInflater inflater = LayoutInflater.from(viewGroup.getContext());
                 return new MessageViewHolder(inflater.inflate(R.layout.item_message, viewGroup, false));
             }
@@ -180,6 +173,15 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.O
                 if (chatMessage.getText() != null) {
                     viewHolder.messageTextView.setText(chatMessage.getText());
                     viewHolder.messageTextView.setVisibility(TextView.VISIBLE);
+                    if (chatMessage.getName() == mUsername) {
+                        Log.d("sender", "onBindViewHolder: " + viewHolder.getLayoutPosition());
+                        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT);
+                        params.weight = 1.0f;
+                        params.gravity = Gravity.RIGHT;
+                        viewHolder.messageTextView.setLayoutParams(params);
+                        viewHolder.messageTextView.setBackgroundResource(R.drawable.outgoing_message_bubble);
+                        viewHolder.messengerTextView.setLayoutParams(params);
+                    }
 
                     // write this message to the on-device index
                     FirebaseAppIndex.getInstance().update(getMessageIndexable(chatMessage));
@@ -187,7 +189,6 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.O
                 }
 
                 viewHolder.messengerTextView.setText(chatMessage.getName());
-
             }
         };
 
@@ -236,8 +237,9 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.O
             @Override
             public void onClick(View view) {
                 mUsername = FirebaseAuth.getInstance().getCurrentUser().getDisplayName();
-                ChatMessage chatMessage = new
-                        ChatMessage(mMessageEditText.getText().toString(),
+                String mMessageTime = new Date().toString();
+                ChatMessage chatMessage = new ChatMessage(
+                        mMessageEditText.getText().toString(),
                         mUsername);
                 mFirebaseDatabaseReference.child(MESSAGES_CHILD)
                         .push().setValue(chatMessage);
