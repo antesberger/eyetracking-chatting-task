@@ -1,4 +1,18 @@
+buildscript {
+    repositories {
+        maven { url 'https://maven.fabric.io/public' }
+    }
+
+    dependencies {
+        classpath 'io.fabric.tools:gradle:1.+'
+    }
+}
 apply plugin: 'com.android.application'
+
+repositories {
+    maven { url 'https://maven.fabric.io/public' }
+}
+
 apply plugin: 'io.fabric'
 apply plugin: 'com.google.gms.google-services'
 
@@ -15,10 +29,19 @@ android {
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
         multiDexEnabled true
     }
+    signingConfigs {
+        release {
+            keyAlias 'key'
+            keyPassword 'augustenstr'
+            storeFile file('/Users/lukas/Library/Mobile Documents/com~apple~CloudDocs/UNI/Master/Masterthesis Eye Tracking/Tracking/key')
+            storePassword 'augustenstr'
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
     }
     packagingOptions {
@@ -65,7 +88,7 @@ dependencies {
     implementation 'com.firebaseui:firebase-ui:3.3.1'
 
     //Crashlytics
-    implementation 'com.crashlytics.sdk.android:crashlytics:2.9.2'
+    implementation 'com.crashlytics.sdk.android:crashlytics:2.9.8'
 
     // Testing dependencies
     androidTestImplementation 'junit:junit:4.12'

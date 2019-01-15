@@ -8,7 +8,8 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
-        <activity android:name="com.google.firebase.codelab.eyetrackingchat.MainActivity">
+        <activity android:name=".MainActivity"></activity>
+        <activity android:name=".StartScreen">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -16,6 +17,9 @@
             </intent-filter>
         </activity>
 
+        <meta-data
+            android:name="io.fabric.ApiKey"
+            android:value="211aa0bba505d8e46490039c3952dbfa1df47b21" />
     </application>
 
 </manifest>

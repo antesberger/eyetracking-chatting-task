@@ -16,6 +16,7 @@
 package com.google.firebase.codelab.eyetrackingchat;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
@@ -42,6 +43,7 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import com.crashlytics.android.Crashlytics;
 import com.firebase.ui.database.FirebaseRecyclerAdapter;
 import com.firebase.ui.database.FirebaseRecyclerOptions;
 import com.firebase.ui.database.SnapshotParser;
@@ -59,6 +61,7 @@ import com.google.firebase.appindexing.builders.Indexables;
 import com.google.firebase.appindexing.builders.PersonBuilder;
 import com.firebase.ui.auth.AuthUI;
 
+import io.fabric.sdk.android.Fabric;
 import java.io.File;
 import java.io.FileWriter;
 import java.text.SimpleDateFormat;
@@ -84,7 +87,6 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.O
     public static final String MESSAGES_CHILD = "messages";
     public static final String ANONYMOUS = "anonymous";
     private String mUsername;
-    private String mCreationTime;
     private SharedPreferences mSharedPreferences;
     private static final String MESSAGE_URL = "http://friendlychat.firebase.google.com/message/";
 
@@ -99,163 +101,180 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.O
     private FirebaseRecyclerAdapter<ChatMessage, MessageViewHolder> mFirebaseAdapter;
 
     private int SIGN_IN_REQUEST_CODE = 10;
+    String participant = "empty";
+    String startTime = "no-date";
+    String startTimeMs = "no-ms";
 
     private GestureDetectorCompat mDetector;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        mSharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
-        // Set default username is anonymous.
-        mUsername = ANONYMOUS;
+        Fabric.with(this, new Crashlytics());
 
-        // Initialize Firebase Auth
-
-        if(FirebaseAuth.getInstance().getCurrentUser() == null) {
-            // Start sign in/sign up activity
-            startActivityForResult(
-                    AuthUI.getInstance()
-                            .createSignInIntentBuilder()
-                            .build(),
-                    SIGN_IN_REQUEST_CODE
-            );
-            mCreationTime = String.valueOf(Calendar.getInstance().getTimeInMillis());
-        } else {
-            // User is already signed in. Therefore, display a welcome Toast
-            Toast.makeText(
-                    this,
-                    "Welcome " + FirebaseAuth.getInstance().getCurrentUser().getDisplayName(),
-                    Toast.LENGTH_LONG
-            ).show();
-            mUsername = FirebaseAuth.getInstance().getCurrentUser().getDisplayName();
-            mCreationTime = String.valueOf(FirebaseAuth.getInstance().getCurrentUser().getMetadata().getCreationTimestamp());
+        Bundle bundle = getIntent().getExtras();
+        if(bundle != null) {
+            participant = bundle.getString("participant");
+            startTime = bundle.getString("startTime");
+            startTimeMs = String.valueOf(Calendar.getInstance().getTimeInMillis());
         }
 
-        //initialize headline of motionEvent log
-        writeFileOnInternalStorage(MainActivity.this, "motionEvents.txt","pointerID; eventTime; action; relativeX; relativeY; rawX; rawY; xPrecision; yPrecision; downTime; orientation; pressure; size; edgeFlags; actionButton; metaState; toolType; toolMajor; toolMinor;");
+        if (hasEyetrackingStarted()) {
+            setContentView(R.layout.activity_main);
+            mSharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
+            mUsername = ANONYMOUS; //defaul username
 
-        // Initialize ProgressBar and RecyclerView.
-        mProgressBar =  findViewById(R.id.progressBar);
-        mMessageRecyclerView = findViewById(R.id.messageRecyclerView);
-        mLinearLayoutManager = new LinearLayoutManager(this);
-        mLinearLayoutManager.setStackFromEnd(true);
-        mMessageRecyclerView.setLayoutManager(mLinearLayoutManager);
+            // Initialize Firebase Auth
+            if (FirebaseAuth.getInstance().getCurrentUser() == null) {
+                // Start sign in/sign up activity
+                startActivityForResult(
+                        AuthUI.getInstance()
+                                .createSignInIntentBuilder()
+                                .build(),
+                        SIGN_IN_REQUEST_CODE
+                );
+            } else {
+                // User is already signed in. Therefore, display a welcome Toast
+                Toast.makeText(
+                        this,
+                        "Welcome " + participant,
+                        Toast.LENGTH_LONG
+                ).show();
+                mUsername = FirebaseAuth.getInstance().getCurrentUser().getDisplayName();
+            }
 
-        // New child entries
-        mFirebaseDatabaseReference = FirebaseDatabase.getInstance().getReference();
-        SnapshotParser<ChatMessage> parser = new SnapshotParser<ChatMessage>() {
-            @Override
-            public ChatMessage parseSnapshot(DataSnapshot dataSnapshot) {
-                ChatMessage chatMessage = dataSnapshot.getValue(ChatMessage.class);
-                if (chatMessage != null) {
-                    chatMessage.setId(dataSnapshot.getKey());
+            //initialize headline of motionEvent log
+            writeFileOnInternalStorage(MainActivity.this, "motionEvents.txt", "pointerID; eventTime; action; relativeX; relativeY; rawX; rawY; xPrecision; yPrecision; downTime; orientation; pressure; size; edgeFlags; actionButton; metaState; toolType; toolMajor; toolMinor;");
+
+            // Initialize ProgressBar and RecyclerView.
+            mProgressBar = findViewById(R.id.progressBar);
+            mMessageRecyclerView = findViewById(R.id.messageRecyclerView);
+            mLinearLayoutManager = new LinearLayoutManager(this);
+            mLinearLayoutManager.setStackFromEnd(true);
+            mMessageRecyclerView.setLayoutManager(mLinearLayoutManager);
+
+            // New child entries
+            mFirebaseDatabaseReference = FirebaseDatabase.getInstance().getReference();
+            SnapshotParser<ChatMessage> parser = new SnapshotParser<ChatMessage>() {
+                @Override
+                public ChatMessage parseSnapshot(DataSnapshot dataSnapshot) {
+                    ChatMessage chatMessage = dataSnapshot.getValue(ChatMessage.class);
+                    if (chatMessage != null) {
+                        chatMessage.setId(dataSnapshot.getKey());
+                    }
+                    return chatMessage;
                 }
-                return chatMessage;
-            }
-        };
+            };
 
-        final DatabaseReference messagesRef = mFirebaseDatabaseReference.child(MESSAGES_CHILD);
-        FirebaseRecyclerOptions<ChatMessage> options =
-                new FirebaseRecyclerOptions.Builder<ChatMessage>()
-                        .setQuery(messagesRef.orderByChild("messageTime").startAt(mCreationTime), parser)
-                        .build();
+            final DatabaseReference messagesRef = mFirebaseDatabaseReference.child(MESSAGES_CHILD);
+            FirebaseRecyclerOptions<ChatMessage> options =
+                    new FirebaseRecyclerOptions.Builder<ChatMessage>()
+                            .setQuery(messagesRef.orderByChild("messageTime").startAt(startTimeMs), parser)
+                            .build();
 
-        mFirebaseAdapter = new FirebaseRecyclerAdapter<ChatMessage, MessageViewHolder>(options) {
-            @Override
-            public MessageViewHolder onCreateViewHolder(ViewGroup viewGroup, int i) {
+            mFirebaseAdapter = new FirebaseRecyclerAdapter<ChatMessage, MessageViewHolder>(options) {
+                @Override
+                public MessageViewHolder onCreateViewHolder(ViewGroup viewGroup, int i) {
 
 
-                LayoutInflater inflater = LayoutInflater.from(viewGroup.getContext());
-                return new MessageViewHolder(inflater.inflate(R.layout.item_message, viewGroup, false));
-            }
+                    LayoutInflater inflater = LayoutInflater.from(viewGroup.getContext());
+                    return new MessageViewHolder(inflater.inflate(R.layout.item_message, viewGroup, false));
+                }
 
-            @Override
-            protected void onBindViewHolder(final MessageViewHolder viewHolder, int position, ChatMessage chatMessage) {
-                mProgressBar.setVisibility(ProgressBar.INVISIBLE);
-                if (chatMessage.getText() != null) {
-                    viewHolder.messageTextView.setText(chatMessage.getText());
-                    viewHolder.messageTextView.setVisibility(TextView.VISIBLE);
-                    if (chatMessage.getName() == mUsername) {
-                        Log.d("sender", "onBindViewHolder: " + viewHolder.getLayoutPosition());
-                        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT);
-                        params.weight = 1.0f;
-                        params.gravity = Gravity.RIGHT;
-                        viewHolder.messageTextView.setLayoutParams(params);
-                        viewHolder.messageTextView.setBackgroundResource(R.drawable.outgoing_message_bubble);
-                        viewHolder.messengerTextView.setLayoutParams(params);
+                @Override
+                protected void onBindViewHolder(final MessageViewHolder viewHolder, int position, ChatMessage chatMessage) {
+                    mProgressBar.setVisibility(ProgressBar.INVISIBLE);
+                    if (chatMessage.getText() != null) {
+                        viewHolder.messageTextView.setText(chatMessage.getText());
+                        viewHolder.messageTextView.setVisibility(TextView.VISIBLE);
+                        if (chatMessage.getName() == mUsername) {
+                            Log.d("sender", "onBindViewHolder: " + viewHolder.getLayoutPosition());
+                            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT);
+                            params.weight = 1.0f;
+                            params.gravity = Gravity.RIGHT;
+                            viewHolder.messageTextView.setLayoutParams(params);
+                            viewHolder.messageTextView.setBackgroundResource(R.drawable.outgoing_message_bubble);
+                            viewHolder.messengerTextView.setLayoutParams(params);
+                        }
+
+                        // write this message to the on-device index
+                        FirebaseAppIndex.getInstance().update(getMessageIndexable(chatMessage));
+
                     }
 
-                    // write this message to the on-device index
-                    FirebaseAppIndex.getInstance().update(getMessageIndexable(chatMessage));
+                    viewHolder.messengerTextView.setText(chatMessage.getName());
+                }
+            };
 
+            mFirebaseAdapter.registerAdapterDataObserver(new RecyclerView.AdapterDataObserver() {
+                @Override
+                public void onItemRangeInserted(int positionStart, int itemCount) {
+                    super.onItemRangeInserted(positionStart, itemCount);
+                    int friendlyMessageCount = mFirebaseAdapter.getItemCount();
+                    int lastVisiblePosition =
+                            mLinearLayoutManager.findLastCompletelyVisibleItemPosition();
+                    // If the recycler view is initially being loaded or the
+                    // user is at the bottom of the list, scroll to the bottom
+                    // of the list to show the newly added message.
+                    if (lastVisiblePosition == -1 ||
+                            (positionStart >= (friendlyMessageCount - 1) &&
+                                    lastVisiblePosition == (positionStart - 1))) {
+                        mMessageRecyclerView.scrollToPosition(positionStart);
+                    }
+                }
+            });
+
+            mMessageRecyclerView.setAdapter(mFirebaseAdapter);
+
+            mMessageEditText = findViewById(R.id.messageEditText);
+            mMessageEditText.addTextChangedListener(new TextWatcher() {
+                @Override
+                public void beforeTextChanged(CharSequence charSequence, int i, int i1, int i2) {
                 }
 
-                viewHolder.messengerTextView.setText(chatMessage.getName());
-            }
-        };
-
-        mFirebaseAdapter.registerAdapterDataObserver(new RecyclerView.AdapterDataObserver() {
-            @Override
-            public void onItemRangeInserted(int positionStart, int itemCount) {
-                super.onItemRangeInserted(positionStart, itemCount);
-                int friendlyMessageCount = mFirebaseAdapter.getItemCount();
-                int lastVisiblePosition =
-                        mLinearLayoutManager.findLastCompletelyVisibleItemPosition();
-                // If the recycler view is initially being loaded or the
-                // user is at the bottom of the list, scroll to the bottom
-                // of the list to show the newly added message.
-                if (lastVisiblePosition == -1 ||
-                        (positionStart >= (friendlyMessageCount - 1) &&
-                                lastVisiblePosition == (positionStart - 1))) {
-                    mMessageRecyclerView.scrollToPosition(positionStart);
+                @Override
+                public void onTextChanged(CharSequence charSequence, int i, int i1, int i2) {
+                    if (charSequence.toString().trim().length() > 0) {
+                        mSendButton.setEnabled(true);
+                    } else {
+                        mSendButton.setEnabled(false);
+                    }
                 }
-            }
-        });
 
-        mMessageRecyclerView.setAdapter(mFirebaseAdapter);
-
-        mMessageEditText = findViewById(R.id.messageEditText);
-        mMessageEditText.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence charSequence, int i, int i1, int i2) {
-            }
-
-            @Override
-            public void onTextChanged(CharSequence charSequence, int i, int i1, int i2) {
-                if (charSequence.toString().trim().length() > 0) {
-                    mSendButton.setEnabled(true);
-                } else {
-                    mSendButton.setEnabled(false);
+                @Override
+                public void afterTextChanged(Editable editable) {
                 }
-            }
+            });
 
-            @Override
-            public void afterTextChanged(Editable editable) {
-            }
-        });
+            mSendButton = findViewById(R.id.sendButton);
+            mSendButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    mUsername = FirebaseAuth.getInstance().getCurrentUser().getDisplayName();
+                    ChatMessage chatMessage = new ChatMessage(
+                            mMessageEditText.getText().toString(),
+                            mUsername);
+                    mFirebaseDatabaseReference.child(MESSAGES_CHILD)
+                            .push().setValue(chatMessage);
+                    writeFileOnInternalStorage(MainActivity.this, "messages.txt", mMessageEditText.getText().toString());
+                    mMessageEditText.setText("");
+                }
+            });
 
-        mSendButton = findViewById(R.id.sendButton);
-        mSendButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                mUsername = FirebaseAuth.getInstance().getCurrentUser().getDisplayName();
-                String mMessageTime = new Date().toString();
-                ChatMessage chatMessage = new ChatMessage(
-                        mMessageEditText.getText().toString(),
-                        mUsername);
-                mFirebaseDatabaseReference.child(MESSAGES_CHILD)
-                        .push().setValue(chatMessage);
-                writeFileOnInternalStorage(MainActivity.this, "messages.txt", mMessageEditText.getText().toString());
-                mMessageEditText.setText("");
-            }
-        });
-
-        mMessageRecyclerView.setOnTouchListener(onTouchListener);
-        mMessageEditText.setOnTouchListener(onTouchListener);
-        mSendButton.setOnTouchListener(onTouchListener);
-        mDetector = new GestureDetectorCompat(this,this);
-        mDetector.setOnDoubleTapListener(this);
+            mMessageRecyclerView.setOnTouchListener(onTouchListener);
+            mMessageEditText.setOnTouchListener(onTouchListener);
+            mSendButton.setOnTouchListener(onTouchListener);
+            mDetector = new GestureDetectorCompat(this, this);
+            mDetector.setOnDoubleTapListener(this);
+        } else {
+           Intent intent = new Intent(MainActivity.this, StartScreen.class);
+           startActivity(intent);
+           Toast.makeText(
+                   MainActivity.this,
+                   "Recheck your ID and make sure that the eyetracking has started",
+                   Toast.LENGTH_LONG
+           ).show();
+        }
     }
 
     View.OnTouchListener onTouchListener = new View.OnTouchListener() {
@@ -264,7 +283,7 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.O
             int historySize = event.getHistorySize();
             int pointerCount = event.getPointerCount();
 
-            //Action Move events are batched together -> loop thorugh historical data since last event trigger
+            //Action Move events are batched together -> loop through historical data since last event trigger
             for (int h = 0; h < historySize; h++) {
                 for (int p = 0; p < pointerCount; p++) {
                     try {
@@ -379,14 +398,18 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.O
 
     @Override
     public void onPause() {
-        mFirebaseAdapter.stopListening();
+        if (hasEyetrackingStarted()) {
+            mFirebaseAdapter.stopListening();
+        }
         super.onPause();
     }
 
     @Override
     public void onResume() {
+        if (hasEyetrackingStarted()) {
+            mFirebaseAdapter.startListening();
+        }
         super.onResume();
-        mFirebaseAdapter.startListening();
     }
 
     @Override
@@ -418,6 +441,9 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.O
                                 finish();
                             }
                         });
+            case R.id.task_done_menu:
+                Intent intent = new Intent(MainActivity.this, StartScreen.class);
+                startActivity(intent);
             default:
                 return super.onOptionsItemSelected(item);
         }
@@ -504,13 +530,20 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.O
         return false;
     }
 
+
+    public boolean hasEyetrackingStarted() {
+        Log.d("HERE", "hasEyetrackingStarted: " + participant + "_" + startTime);
+        File file = new File(MainActivity.this.getFilesDir(), participant + "_" + startTime);
+        if(!file.exists()){
+            return false;
+        } else {
+            return true;
+        }
+    }
+
     public void writeFileOnInternalStorage(Context mcoContext, String sFileName, String sBody){
         SimpleDateFormat timestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
-        File file = new File(mcoContext.getFilesDir(), mUsername + "_" + mCreationTime);
-
-        if(!file.exists()){
-            file.mkdir();
-        }
+        File file = new File(mcoContext.getFilesDir(), participant + "_" + startTime);
 
         try{
             File outFile = new File(file, sFileName);
