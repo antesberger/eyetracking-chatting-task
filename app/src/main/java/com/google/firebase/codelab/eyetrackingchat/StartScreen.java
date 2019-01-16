@@ -34,7 +34,7 @@ public class StartScreen extends AppCompatActivity {
 
             @Override
             public void onTextChanged(CharSequence charSequence, int i, int count, int i2) {
-                if(count >= 4) {
+                if(count >= 3) {
                     startButton.setEnabled(true);
                 } else {
                     startButton.setEnabled(false);

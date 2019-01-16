@@ -532,8 +532,11 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.O
 
 
     public boolean hasEyetrackingStarted() {
-        Log.d("HERE", "hasEyetrackingStarted: " + participant + "_" + startTime);
         File file = new File(MainActivity.this.getFilesDir(), participant + "_" + startTime);
+        if (participant.equals("test")) {
+            return true;
+        }
+
         if(!file.exists()){
             return false;
         } else {
