@@ -172,6 +172,7 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.O
                             .setQuery(messagesRef.orderByChild("messageTime").startAt(startTimeMs), parser)
                             .build();
 
+            mProgressBar.setVisibility(ProgressBar.INVISIBLE);
             mFirebaseAdapter = new FirebaseRecyclerAdapter<ChatMessage, MessageViewHolder>(options) {
                 @Override
                 public MessageViewHolder onCreateViewHolder(ViewGroup viewGroup, int i) {
