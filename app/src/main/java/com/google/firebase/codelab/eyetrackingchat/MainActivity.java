@@ -188,19 +188,28 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.O
                     if (chatMessage.getText() != null) {
                         viewHolder.messageTextView.setText(chatMessage.getText());
                         viewHolder.messageTextView.setVisibility(TextView.VISIBLE);
-                        if (chatMessage.getName() == mUsername) {
-                            Log.d("sender", "onBindViewHolder: " + viewHolder.getLayoutPosition());
-                            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT);
-                            params.weight = 1.0f;
-                            params.gravity = Gravity.RIGHT;
-                            viewHolder.messageTextView.setLayoutParams(params);
-                            viewHolder.messageTextView.setBackgroundResource(R.drawable.outgoing_message_bubble);
-                            viewHolder.messengerTextView.setLayoutParams(params);
-                        }
 
                         // write this message to the on-device index
                         FirebaseAppIndex.getInstance().update(getMessageIndexable(chatMessage));
 
+                        // reset viewholder layout
+                        LinearLayout.LayoutParams resetParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT);
+                        resetParams.weight = 1.0f;
+                        resetParams.gravity = Gravity.LEFT;
+                        viewHolder.messageTextView.setLayoutParams(resetParams);
+                        viewHolder.messengerTextView.setLayoutParams(resetParams);
+                        viewHolder.messageTextView.setBackgroundResource(R.drawable.incoming_message_bubble);
+
+                        if (mUsername.equals(chatMessage.getName())) {
+                            Log.d("SENDER", "onBindViewHolder: " + viewHolder.getLayoutPosition());
+                            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT);
+                            params.weight = 1.0f;
+                            params.gravity = Gravity.RIGHT;
+
+                            viewHolder.messageTextView.setLayoutParams(params);
+                            viewHolder.messageTextView.setBackgroundResource(R.drawable.outgoing_message_bubble);
+                            viewHolder.messengerTextView.setLayoutParams(params);
+                        }
                     }
 
                     viewHolder.messengerTextView.setText(chatMessage.getName());
